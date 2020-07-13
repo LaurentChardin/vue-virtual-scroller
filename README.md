@@ -1,3 +1,8 @@
+> Vue3 update :
+> - updating packages
+> - specific version of scrollparent (ES6 compliant)
+> - specific version of vue-resize (see vue3 update PR)
+
 # vue-virtual-scroller
 
 [![npm](https://img.shields.io/npm/v/vue-virtual-scroller.svg) ![npm](https://img.shields.io/npm/dm/vue-virtual-scroller.svg)](https://www.npmjs.com/package/vue-virtual-scroller)

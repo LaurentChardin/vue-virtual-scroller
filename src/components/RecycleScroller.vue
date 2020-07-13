@@ -56,7 +56,7 @@
 <script>
 import { ResizeObserver } from 'vue-resize'
 import { ObserveVisibility } from 'vue-observe-visibility'
-import ScrollParent from 'scrollparent'
+import ScrollParent from '../scrollparent'
 import config from '../config'
 import { props, simpleArray } from './common'
 import { supportsPassive } from '../utils'
@@ -201,7 +201,7 @@ export default {
     })
   },
 
-  beforeDestroy () {
+  beforeUnmount () {
     this.removeListeners()
   },
 
@@ -210,7 +210,15 @@ export default {
       const view = {
         item,
         position: 0,
+        nr: {
+          id: uid++,
+          index,
+          used: true,
+          key,
+          type,
+        },
       }
+      /*
       const nonReactive = {
         id: uid++,
         index,
@@ -222,6 +230,7 @@ export default {
         configurable: false,
         value: nonReactive,
       })
+      */
       pool.push(view)
       return view
     },
@@ -412,6 +421,7 @@ export default {
       let v
       for (let i = startIndex; i < endIndex; i++) {
         item = items[i]
+
         const key = keyField ? item[keyField] : item
         if (key == null) {
           throw new Error(`Key is ${key} on item (keyField is '${keyField}')`)
@@ -531,7 +541,6 @@ export default {
           end: el.scrollLeft + el.clientWidth,
         }
       }
-
       return scrollState
     },
 
@@ -549,6 +558,7 @@ export default {
         passive: true,
       } : false)
       this.listenerTarget.addEventListener('resize', this.handleResize)
+      console.debug('RecycleScroller: add listener')
     },
 
     removeListeners () {
@@ -560,6 +570,7 @@ export default {
       this.listenerTarget.removeEventListener('resize', this.handleResize)
 
       this.listenerTarget = null
+      console.debug('RecycleScroller: remove listener')
     },
 
     scrollToItem (index) {

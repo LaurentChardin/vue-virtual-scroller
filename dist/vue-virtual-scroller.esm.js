@@ -1,7 +1,6 @@
 import { ResizeObserver as ResizeObserver$1 } from 'vue-resize';
 import { ObserveVisibility } from 'vue-observe-visibility';
-import ScrollParent from 'scrollparent';
-import Vue from 'vue';
+import { resolveComponent, resolveDirective, withDirectives, openBlock, createBlock, renderSlot, createCommentVNode, createVNode, Fragment, renderList, mergeProps, toHandlers, withCtx } from 'vue';
 
 var config = {
   itemsLimit: 1000
@@ -77,7 +76,7 @@ function _unsupportedIterableToArray(o, minLen) {
   if (typeof o === "string") return _arrayLikeToArray(o, minLen);
   var n = Object.prototype.toString.call(o).slice(8, -1);
   if (n === "Object" && o.constructor) n = o.constructor.name;
-  if (n === "Map" || n === "Set") return Array.from(n);
+  if (n === "Map" || n === "Set") return Array.from(o);
   if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
 }
 
@@ -89,9 +88,12 @@ function _arrayLikeToArray(arr, len) {
   return arr2;
 }
 
-function _createForOfIteratorHelper(o) {
+function _createForOfIteratorHelper(o, allowArrayLike) {
+  var it;
+
   if (typeof Symbol === "undefined" || o[Symbol.iterator] == null) {
-    if (Array.isArray(o) || (o = _unsupportedIterableToArray(o))) {
+    if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+      if (it) o = it;
       var i = 0;
 
       var F = function () {};
@@ -117,8 +119,7 @@ function _createForOfIteratorHelper(o) {
     throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
   }
 
-  var it,
-      normalCompletion = true,
+  var normalCompletion = true,
       didErr = false,
       err;
   return {
@@ -143,6 +144,44 @@ function _createForOfIteratorHelper(o) {
     }
   };
 }
+
+var regex = /(auto|scroll)/;
+
+var parents = function parents(node, ps) {
+  if (node.parentNode === null) {
+    return ps;
+  }
+
+  return parents(node.parentNode, ps.concat([node]));
+};
+
+var style = function style(node, prop) {
+  return getComputedStyle(node, null).getPropertyValue(prop);
+};
+
+var overflow = function overflow(node) {
+  return style(node, 'overflow') + style(node, 'overflow-y') + style(node, 'overflow-x');
+};
+
+var scroll = function scroll(node) {
+  return regex.test(overflow(node));
+};
+
+var scrollParent = function scrollParent(node) {
+  if (!(node instanceof HTMLElement || node instanceof SVGElement)) {
+    return;
+  }
+
+  var ps = parents(node.parentNode, []);
+
+  for (var i = 0; i < ps.length; i += 1) {
+    if (scroll(ps[i])) {
+      return ps[i];
+    }
+  }
+
+  return document.scrollingElement || document.documentElement;
+};
 
 var props = {
   items: {
@@ -189,7 +228,7 @@ var script = {
   directives: {
     ObserveVisibility: ObserveVisibility
   },
-  props: _objectSpread2({}, props, {
+  props: _objectSpread2(_objectSpread2({}, props), {}, {
     itemSize: {
       type: Number,
       default: null
@@ -311,26 +350,36 @@ var script = {
       _this.ready = true;
     });
   },
-  beforeDestroy: function beforeDestroy() {
+  beforeUnmount: function beforeUnmount() {
     this.removeListeners();
   },
   methods: {
     addView: function addView(pool, index, item, key, type) {
       var view = {
         item: item,
-        position: 0
+        position: 0,
+        nr: {
+          id: uid++,
+          index: index,
+          used: true,
+          key: key,
+          type: type
+        }
       };
-      var nonReactive = {
+      /*
+      const nonReactive = {
         id: uid++,
-        index: index,
+        index,
         used: true,
-        key: key,
-        type: type
-      };
+        key,
+        type,
+      }
       Object.defineProperty(view, 'nr', {
         configurable: false,
-        value: nonReactive
-      });
+        value: nonReactive,
+      })
+      */
+
       pool.push(view);
       return view;
     },
@@ -601,7 +650,7 @@ var script = {
       };
     },
     getListenerTarget: function getListenerTarget() {
-      var target = ScrollParent(this.$el); // Fix global scroll target for Chrome and Safari
+      var target = scrollParent(this.$el); // Fix global scroll target for Chrome and Safari
 
       if (window.document && (target === window.document.documentElement || target === window.document.body)) {
         target = window;
@@ -661,6 +710,7 @@ var script = {
         passive: true
       } : false);
       this.listenerTarget.addEventListener('resize', this.handleResize);
+      console.debug('RecycleScroller: add listener');
     },
     removeListeners: function removeListeners() {
       if (!this.listenerTarget) {
@@ -670,6 +720,7 @@ var script = {
       this.listenerTarget.removeEventListener('scroll', this.handleScroll);
       this.listenerTarget.removeEventListener('resize', this.handleResize);
       this.listenerTarget = null;
+      console.debug('RecycleScroller: remove listener');
     },
     scrollToItem: function scrollToItem(index) {
       var scroll;
@@ -706,224 +757,76 @@ var script = {
   }
 };
 
-function normalizeComponent(template, style, script, scopeId, isFunctionalTemplate, moduleIdentifier /* server only */, shadowMode, createInjector, createInjectorSSR, createInjectorShadow) {
-    if (typeof shadowMode !== 'boolean') {
-        createInjectorSSR = createInjector;
-        createInjector = shadowMode;
-        shadowMode = false;
-    }
-    // Vue.extend constructor export interop.
-    const options = typeof script === 'function' ? script.options : script;
-    // render functions
-    if (template && template.render) {
-        options.render = template.render;
-        options.staticRenderFns = template.staticRenderFns;
-        options._compiled = true;
-        // functional template
-        if (isFunctionalTemplate) {
-            options.functional = true;
-        }
-    }
-    // scopedId
-    if (scopeId) {
-        options._scopeId = scopeId;
-    }
-    let hook;
-    if (moduleIdentifier) {
-        // server build
-        hook = function (context) {
-            // 2.3 injection
-            context =
-                context || // cached call
-                    (this.$vnode && this.$vnode.ssrContext) || // stateful
-                    (this.parent && this.parent.$vnode && this.parent.$vnode.ssrContext); // functional
-            // 2.2 with runInNewContext: true
-            if (!context && typeof __VUE_SSR_CONTEXT__ !== 'undefined') {
-                context = __VUE_SSR_CONTEXT__;
-            }
-            // inject component styles
-            if (style) {
-                style.call(this, createInjectorSSR(context));
-            }
-            // register component module identifier for async chunk inference
-            if (context && context._registeredComponents) {
-                context._registeredComponents.add(moduleIdentifier);
-            }
-        };
-        // used by ssr in case component is cached and beforeCreate
-        // never gets called
-        options._ssrRegister = hook;
-    }
-    else if (style) {
-        hook = shadowMode
-            ? function (context) {
-                style.call(this, createInjectorShadow(context, this.$root.$options.shadowRoot));
-            }
-            : function (context) {
-                style.call(this, createInjector(context));
-            };
-    }
-    if (hook) {
-        if (options.functional) {
-            // register for functional component in vue file
-            const originalRender = options.render;
-            options.render = function renderWithStyleInjection(h, context) {
-                hook.call(context);
-                return originalRender(h, context);
-            };
-        }
-        else {
-            // inject component registration as beforeCreate hook
-            const existing = options.beforeCreate;
-            options.beforeCreate = existing ? [].concat(existing, hook) : [hook];
-        }
-    }
-    return script;
+const _hoisted_1 = {
+  key: 0,
+  class: "vue-recycle-scroller__slot"
+};
+const _hoisted_2 = {
+  key: 0,
+  class: "vue-recycle-scroller__slot"
+};
+
+function render(_ctx, _cache) {
+  const _component_ResizeObserver = resolveComponent("ResizeObserver");
+  const _directive_observe_visibility = resolveDirective("observe-visibility");
+
+  return withDirectives((openBlock(), createBlock("div", {
+    class: ["vue-recycle-scroller", {
+      ready: _ctx.ready,
+      'page-mode': _ctx.pageMode,
+      [`direction-${_ctx.direction}`]: true,
+    }],
+    onScroll: _cache[3] || (_cache[3] = {
+      handler: ($event, ...args) => (_ctx.handleScroll($event, ...args)),
+      options: { passive: true }
+    })
+  }, [
+    (_ctx.$slots.before)
+      ? (openBlock(), createBlock("div", _hoisted_1, [
+          renderSlot(_ctx.$slots, "before")
+        ]))
+      : createCommentVNode("v-if", true),
+    createVNode("div", {
+      ref: "wrapper",
+      style: { [_ctx.direction === 'vertical' ? 'minHeight' : 'minWidth']: _ctx.totalSize + 'px' },
+      class: "vue-recycle-scroller__item-wrapper"
+    }, [
+      (openBlock(true), createBlock(Fragment, null, renderList(_ctx.pool, (view) => {
+        return (openBlock(), createBlock("div", {
+          key: view.nr.id,
+          style: _ctx.ready ? { transform: `translate${_ctx.direction === 'vertical' ? 'Y' : 'X'}(${view.position}px)` } : null,
+          class: ["vue-recycle-scroller__item-view", { hover: _ctx.hoverKey === view.nr.key }],
+          onMouseenter: $event => (_ctx.hoverKey = view.nr.key),
+          onMouseleave: _cache[1] || (_cache[1] = $event => (_ctx.hoverKey = null))
+        }, [
+          renderSlot(_ctx.$slots, "default", {
+            item: view.item,
+            index: view.nr.index,
+            active: view.nr.used
+          })
+        ], 46 /* CLASS, STYLE, PROPS, HYDRATE_EVENTS */, ["onMouseenter"]))
+      }), 128 /* KEYED_FRAGMENT */))
+    ], 4 /* STYLE */),
+    (_ctx.$slots.after)
+      ? (openBlock(), createBlock("div", _hoisted_2, [
+          renderSlot(_ctx.$slots, "after")
+        ]))
+      : createCommentVNode("v-if", true),
+    createVNode(_component_ResizeObserver, {
+      onNotify: _cache[2] || (_cache[2] = ($event, ...args) => (_ctx.handleResize($event, ...args)))
+    })
+  ], 34 /* CLASS, HYDRATE_EVENTS */)), [
+    [_directive_observe_visibility, _ctx.handleVisibilityChange]
+  ])
 }
 
-/* script */
-const __vue_script__ = script;
-/* template */
-var __vue_render__ = function() {
-  var _obj, _obj$1;
-  var _vm = this;
-  var _h = _vm.$createElement;
-  var _c = _vm._self._c || _h;
-  return _c(
-    "div",
-    {
-      directives: [
-        {
-          name: "observe-visibility",
-          rawName: "v-observe-visibility",
-          value: _vm.handleVisibilityChange,
-          expression: "handleVisibilityChange"
-        }
-      ],
-      staticClass: "vue-recycle-scroller",
-      class:
-        ((_obj = {
-          ready: _vm.ready,
-          "page-mode": _vm.pageMode
-        }),
-        (_obj["direction-" + _vm.direction] = true),
-        _obj),
-      on: {
-        "&scroll": function($event) {
-          return _vm.handleScroll($event)
-        }
-      }
-    },
-    [
-      _vm.$slots.before
-        ? _c(
-            "div",
-            { staticClass: "vue-recycle-scroller__slot" },
-            [_vm._t("before")],
-            2
-          )
-        : _vm._e(),
-      _vm._v(" "),
-      _c(
-        "div",
-        {
-          ref: "wrapper",
-          staticClass: "vue-recycle-scroller__item-wrapper",
-          style:
-            ((_obj$1 = {}),
-            (_obj$1[_vm.direction === "vertical" ? "minHeight" : "minWidth"] =
-              _vm.totalSize + "px"),
-            _obj$1)
-        },
-        _vm._l(_vm.pool, function(view) {
-          return _c(
-            "div",
-            {
-              key: view.nr.id,
-              staticClass: "vue-recycle-scroller__item-view",
-              class: { hover: _vm.hoverKey === view.nr.key },
-              style: _vm.ready
-                ? {
-                    transform:
-                      "translate" +
-                      (_vm.direction === "vertical" ? "Y" : "X") +
-                      "(" +
-                      view.position +
-                      "px)"
-                  }
-                : null,
-              on: {
-                mouseenter: function($event) {
-                  _vm.hoverKey = view.nr.key;
-                },
-                mouseleave: function($event) {
-                  _vm.hoverKey = null;
-                }
-              }
-            },
-            [
-              _vm._t("default", null, {
-                item: view.item,
-                index: view.nr.index,
-                active: view.nr.used
-              })
-            ],
-            2
-          )
-        }),
-        0
-      ),
-      _vm._v(" "),
-      _vm.$slots.after
-        ? _c(
-            "div",
-            { staticClass: "vue-recycle-scroller__slot" },
-            [_vm._t("after")],
-            2
-          )
-        : _vm._e(),
-      _vm._v(" "),
-      _c("ResizeObserver", { on: { notify: _vm.handleResize } })
-    ],
-    1
-  )
-};
-var __vue_staticRenderFns__ = [];
-__vue_render__._withStripped = true;
-
-  /* style */
-  const __vue_inject_styles__ = undefined;
-  /* scoped */
-  const __vue_scope_id__ = undefined;
-  /* module identifier */
-  const __vue_module_identifier__ = undefined;
-  /* functional template */
-  const __vue_is_functional_template__ = false;
-  /* style inject */
-  
-  /* style inject SSR */
-  
-  /* style inject shadow dom */
-  
-
-  
-  const __vue_component__ = normalizeComponent(
-    { render: __vue_render__, staticRenderFns: __vue_staticRenderFns__ },
-    __vue_inject_styles__,
-    __vue_script__,
-    __vue_scope_id__,
-    __vue_is_functional_template__,
-    __vue_module_identifier__,
-    false,
-    undefined,
-    undefined,
-    undefined
-  );
+script.render = render;
+script.__file = "src/components/RecycleScroller.vue";
 
 var script$1 = {
   name: 'DynamicScroller',
   components: {
-    RecycleScroller: __vue_component__
+    RecycleScroller: script
   },
   inheritAttrs: false,
   provide: function provide() {
@@ -959,7 +862,7 @@ var script$1 = {
       vscrollResizeObserver: this.$_resizeObserver
     };
   },
-  props: _objectSpread2({}, props, {
+  props: _objectSpread2(_objectSpread2({}, props), {}, {
     minItemSize: {
       type: [Number, String],
       required: true
@@ -1105,96 +1008,45 @@ var script$1 = {
   }
 };
 
-/* script */
-const __vue_script__$1 = script$1;
+const _hoisted_1$1 = { "slot-scope": "{ item: itemWithSize, index, active }" };
+const _hoisted_2$1 = { slot: "before" };
+const _hoisted_3 = { slot: "after" };
 
-/* template */
-var __vue_render__$1 = function() {
-  var _vm = this;
-  var _h = _vm.$createElement;
-  var _c = _vm._self._c || _h;
-  return _c(
-    "RecycleScroller",
-    _vm._g(
-      _vm._b(
-        {
-          ref: "scroller",
-          attrs: {
-            items: _vm.itemsWithSize,
-            "min-item-size": _vm.minItemSize,
-            direction: _vm.direction,
-            "key-field": "id"
-          },
-          on: { resize: _vm.onScrollerResize, visible: _vm.onScrollerVisible },
-          scopedSlots: _vm._u(
-            [
-              {
-                key: "default",
-                fn: function(ref) {
-                  var itemWithSize = ref.item;
-                  var index = ref.index;
-                  var active = ref.active;
-                  return [
-                    _vm._t("default", null, null, {
-                      item: itemWithSize.item,
-                      index: index,
-                      active: active,
-                      itemWithSize: itemWithSize
-                    })
-                  ]
-                }
-              }
-            ],
-            null,
-            true
-          )
-        },
-        "RecycleScroller",
-        _vm.$attrs,
-        false
-      ),
-      _vm.listeners
-    ),
-    [
-      _vm._v(" "),
-      _c("template", { slot: "before" }, [_vm._t("before")], 2),
-      _vm._v(" "),
-      _c("template", { slot: "after" }, [_vm._t("after")], 2)
-    ],
-    2
-  )
-};
-var __vue_staticRenderFns__$1 = [];
-__vue_render__$1._withStripped = true;
+function render$1(_ctx, _cache) {
+  const _component_RecycleScroller = resolveComponent("RecycleScroller");
 
-  /* style */
-  const __vue_inject_styles__$1 = undefined;
-  /* scoped */
-  const __vue_scope_id__$1 = undefined;
-  /* module identifier */
-  const __vue_module_identifier__$1 = undefined;
-  /* functional template */
-  const __vue_is_functional_template__$1 = false;
-  /* style inject */
-  
-  /* style inject SSR */
-  
-  /* style inject shadow dom */
-  
+  return (openBlock(), createBlock(_component_RecycleScroller, mergeProps({
+    ref: "scroller",
+    items: _ctx.itemsWithSize,
+    "min-item-size": _ctx.minItemSize,
+    direction: _ctx.direction,
+    "key-field": "id"
+  }, _ctx.$attrs, {
+    onResize: _cache[1] || (_cache[1] = ($event, ...args) => (_ctx.onScrollerResize($event, ...args))),
+    onVisible: _cache[2] || (_cache[2] = ($event, ...args) => (_ctx.onScrollerVisible($event, ...args)))
+  }, toHandlers(_ctx.listeners)), {
+    default: withCtx(() => [
+      createVNode("template", _hoisted_1$1, [
+        renderSlot(_ctx.$slots, "default", {
+          item: _ctx.itemWithSize.item,
+          index: _ctx.index,
+          active: _ctx.active,
+          itemWithSize: _ctx.itemWithSize
+        })
+      ]),
+      createVNode("template", _hoisted_2$1, [
+        renderSlot(_ctx.$slots, "before")
+      ]),
+      createVNode("template", _hoisted_3, [
+        renderSlot(_ctx.$slots, "after")
+      ])
+    ]),
+    _: 1
+  }, 16 /* FULL_PROPS */, ["items", "min-item-size", "direction"]))
+}
 
-  
-  const __vue_component__$1 = normalizeComponent(
-    { render: __vue_render__$1, staticRenderFns: __vue_staticRenderFns__$1 },
-    __vue_inject_styles__$1,
-    __vue_script__$1,
-    __vue_scope_id__$1,
-    __vue_is_functional_template__$1,
-    __vue_module_identifier__$1,
-    false,
-    undefined,
-    undefined,
-    undefined
-  );
+script$1.render = render$1;
+script$1.__file = "src/components/DynamicScroller.vue";
 
 var script$2 = {
   name: 'DynamicScrollerItem',
@@ -1402,139 +1254,19 @@ var script$2 = {
   }
 };
 
-/* script */
-const __vue_script__$2 = script$2;
+const render$2 = () => {};
 
-/* template */
 
-  /* style */
-  const __vue_inject_styles__$2 = undefined;
-  /* scoped */
-  const __vue_scope_id__$2 = undefined;
-  /* module identifier */
-  const __vue_module_identifier__$2 = undefined;
-  /* functional template */
-  const __vue_is_functional_template__$2 = undefined;
-  /* style inject */
-  
-  /* style inject SSR */
-  
-  /* style inject shadow dom */
-  
-
-  
-  const __vue_component__$2 = normalizeComponent(
-    {},
-    __vue_inject_styles__$2,
-    __vue_script__$2,
-    __vue_scope_id__$2,
-    __vue_is_functional_template__$2,
-    __vue_module_identifier__$2,
-    false,
-    undefined,
-    undefined,
-    undefined
-  );
-
-function IdState () {
-  var _ref = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {},
-      _ref$idProp = _ref.idProp,
-      idProp = _ref$idProp === void 0 ? function (vm) {
-    return vm.item.id;
-  } : _ref$idProp;
-
-  var store = {};
-  var vm = new Vue({
-    data: function data() {
-      return {
-        store: store
-      };
-    }
-  }); // @vue/component
-
-  return {
-    data: function data() {
-      return {
-        idState: null
-      };
-    },
-    created: function created() {
-      var _this = this;
-
-      this.$_id = null;
-
-      if (typeof idProp === 'function') {
-        this.$_getId = function () {
-          return idProp.call(_this, _this);
-        };
-      } else {
-        this.$_getId = function () {
-          return _this[idProp];
-        };
-      }
-
-      this.$watch(this.$_getId, {
-        handler: function handler(value) {
-          var _this2 = this;
-
-          this.$nextTick(function () {
-            _this2.$_id = value;
-          });
-        },
-        immediate: true
-      });
-      this.$_updateIdState();
-    },
-    beforeUpdate: function beforeUpdate() {
-      this.$_updateIdState();
-    },
-    methods: {
-      /**
-       * Initialize an idState
-       * @param {number|string} id Unique id for the data
-       */
-      $_idStateInit: function $_idStateInit(id) {
-        var factory = this.$options.idState;
-
-        if (typeof factory === 'function') {
-          var data = factory.call(this, this);
-          vm.$set(store, id, data);
-          this.$_id = id;
-          return data;
-        } else {
-          throw new Error('[mixin IdState] Missing `idState` function on component definition.');
-        }
-      },
-
-      /**
-       * Ensure idState is created and up-to-date
-       */
-      $_updateIdState: function $_updateIdState() {
-        var id = this.$_getId();
-
-        if (id == null) {
-          console.warn("No id found for IdState with idProp: '".concat(idProp, "'."));
-        }
-
-        if (id !== this.$_id) {
-          if (!store[id]) {
-            this.$_idStateInit(id);
-          }
-
-          this.idState = store[id];
-        }
-      }
-    }
-  };
-}
+script$2.render = render$2;
+script$2.__file = "src/components/DynamicScrollerItem.vue";
 
 function registerComponents(Vue, prefix) {
-  Vue.component("".concat(prefix, "recycle-scroller"), __vue_component__);
-  Vue.component("".concat(prefix, "RecycleScroller"), __vue_component__);
-  Vue.component("".concat(prefix, "dynamic-scroller"), __vue_component__$1);
-  Vue.component("".concat(prefix, "DynamicScroller"), __vue_component__$1);
-  Vue.component("".concat(prefix, "dynamic-scroller-item"), __vue_component__$2);
-  Vue.component("".concat(prefix, "DynamicScrollerItem"), __vue_component__$2);
+  Vue.component("".concat(prefix, "recycle-scroller"), script);
+  Vue.component("".concat(prefix, "RecycleScroller"), script);
+  Vue.component("".concat(prefix, "dynamic-scroller"), script$1);
+  Vue.component("".concat(prefix, "DynamicScroller"), script$1);
+  Vue.component("".concat(prefix, "dynamic-scroller-item"), script$2);
+  Vue.component("".concat(prefix, "DynamicScrollerItem"), script$2);
 }
 
 var plugin = {
@@ -1571,5 +1303,5 @@ if (GlobalVue) {
 }
 
 export default plugin;
-export { __vue_component__$1 as DynamicScroller, __vue_component__$2 as DynamicScrollerItem, IdState, __vue_component__ as RecycleScroller };
+export { script$1 as DynamicScroller, script$2 as DynamicScrollerItem, script as RecycleScroller };
 //# sourceMappingURL=vue-virtual-scroller.esm.js.map

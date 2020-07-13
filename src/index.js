@@ -4,7 +4,7 @@ import RecycleScroller from './components/RecycleScroller.vue'
 import DynamicScroller from './components/DynamicScroller.vue'
 import DynamicScrollerItem from './components/DynamicScrollerItem.vue'
 
-export { default as IdState } from './mixins/IdState'
+// export { default as IdState } from './mixins/IdState'
 
 export {
   RecycleScroller,
