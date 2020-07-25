@@ -145,6 +145,8 @@ function _createForOfIteratorHelper(o, allowArrayLike) {
   };
 }
 
+// Duplicated version of https://github.com/olahol/scrollparent.js
+// This version is ESM compliant so it can work with vite https://github.com/vitejs/vite
 var regex = /(auto|scroll)/;
 
 var parents = function parents(node, ps) {
@@ -762,11 +764,11 @@ const _hoisted_1 = {
   class: "vue-recycle-scroller__slot"
 };
 const _hoisted_2 = {
-  key: 0,
+  key: 1,
   class: "vue-recycle-scroller__slot"
 };
 
-function render(_ctx, _cache) {
+function render(_ctx, _cache, $props, $setup, $data, $options) {
   const _component_ResizeObserver = resolveComponent("ResizeObserver");
   const _directive_observe_visibility = resolveDirective("observe-visibility");
 
@@ -776,10 +778,7 @@ function render(_ctx, _cache) {
       'page-mode': _ctx.pageMode,
       [`direction-${_ctx.direction}`]: true,
     }],
-    onScroll: _cache[3] || (_cache[3] = {
-      handler: ($event, ...args) => (_ctx.handleScroll($event, ...args)),
-      options: { passive: true }
-    })
+    onScrollPassive: _cache[2] || (_cache[2] = (...args) => (_ctx.handleScroll(...args)))
   }, [
     (_ctx.$slots.before)
       ? (openBlock(), createBlock("div", _hoisted_1, [
@@ -812,9 +811,7 @@ function render(_ctx, _cache) {
           renderSlot(_ctx.$slots, "after")
         ]))
       : createCommentVNode("v-if", true),
-    createVNode(_component_ResizeObserver, {
-      onNotify: _cache[2] || (_cache[2] = ($event, ...args) => (_ctx.handleResize($event, ...args)))
-    })
+    createVNode(_component_ResizeObserver, { onNotify: _ctx.handleResize }, null, 8 /* PROPS */, ["onNotify"])
   ], 34 /* CLASS, HYDRATE_EVENTS */)), [
     [_directive_observe_visibility, _ctx.handleVisibilityChange]
   ])
@@ -1012,7 +1009,7 @@ const _hoisted_1$1 = { "slot-scope": "{ item: itemWithSize, index, active }" };
 const _hoisted_2$1 = { slot: "before" };
 const _hoisted_3 = { slot: "after" };
 
-function render$1(_ctx, _cache) {
+function render$1(_ctx, _cache, $props, $setup, $data, $options) {
   const _component_RecycleScroller = resolveComponent("RecycleScroller");
 
   return (openBlock(), createBlock(_component_RecycleScroller, mergeProps({
@@ -1022,8 +1019,8 @@ function render$1(_ctx, _cache) {
     direction: _ctx.direction,
     "key-field": "id"
   }, _ctx.$attrs, {
-    onResize: _cache[1] || (_cache[1] = ($event, ...args) => (_ctx.onScrollerResize($event, ...args))),
-    onVisible: _cache[2] || (_cache[2] = ($event, ...args) => (_ctx.onScrollerVisible($event, ...args)))
+    onResize: _ctx.onScrollerResize,
+    onVisible: _ctx.onScrollerVisible
   }, toHandlers(_ctx.listeners)), {
     default: withCtx(() => [
       createVNode("template", _hoisted_1$1, [
@@ -1041,8 +1038,8 @@ function render$1(_ctx, _cache) {
         renderSlot(_ctx.$slots, "after")
       ])
     ]),
-    _: 1
-  }, 16 /* FULL_PROPS */, ["items", "min-item-size", "direction"]))
+    _: 3
+  }, 16 /* FULL_PROPS */, ["items", "min-item-size", "direction", "onResize", "onVisible"]))
 }
 
 script$1.render = render$1;
